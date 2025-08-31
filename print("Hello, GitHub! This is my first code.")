@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="hi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mini Rapido Demo – Fare & Fake Booking</title>
+  <style>
+    :root { --bg:#0f172a; --card:#111827; --muted:#94a3b8; --text:#e5e7eb; --accent:#22c55e; }
+    *{ box-sizing:border-box; }
+    body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial; background:var(--bg); color:var(--text); }
+    .wrap{ max-width:760px; margin:24px auto; padding:16px; }
+    .card{ background:linear-gradient(180deg,#111827, #0b1220); border:1px solid #1f2937; border-radius:16px; padding:18px; box-shadow:0 10px 30px rgba(0,0,0,.35); }
+    h1{ margin:0 0 8px; font-size:26px; }
+    .muted{ color:var(--muted); font-size:14px; margin-bottom:14px; }
+    label{ font-size:14px; color:#cbd5e1; display:block; margin:10px 0 6px; }
+    input, select{ width:100%; padding:12px; border-radius:10px; border:1px solid #334155; background:#0b1220; color:#e5e7eb; outline:none; }
+    input:focus, select:focus{ border-color:#2563eb; }
+    .row{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .btn{ display:inline-block; padding:12px 16px; border:none; border-radius:12px; cursor:pointer; font-weight:600; }
+    .btn-primary{ background:var(--accent); color:#052e16; }
+    .btn-ghost{ background:#0b1220; color:#cbd5e1; border:1px solid #334155; }
+    .actions{ display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; }
+    .result{ margin-top:12px; padding:12px; border-radius:12px; background:#0b1220; border:1px dashed #334155; }
+    .kpi{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:14px 0; }
+    .kpi > div{ background:#0b1220; border:1px solid #1f2937; border-radius:12px; padding:12px; text-align:center; }
+    table{ width:100%; border-collapse:collapse; margin-top:10px; }
+    th, td{ border-bottom:1px solid #1f2937; padding:10px; font-size:14px; text-align:left; }
+    .pill{ display:inline-block; padding:4px 10px; border-radius:999px; border:1px solid #334155; background:#0b1220; font-size:12px; color:#cbd5e1; }
+    .footer{ text-align:center; color:#94a3b8; font-size:12px; margin-top:16px; }
+    .login{ display:flex; gap:8px; }
+    @media (max-width:640px){ .row{ grid-template-columns:1fr; } .kpi{ grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Mini Rapido Demo 🚀</h1>
+      <div class="muted">सिर्फ सीखने/डेमो के लिए – कोई असली OTP/पेमेंट नहीं।</div>
+
+      <div id="hello"></div>
+      <div class="login" id="loginBox">
+        <input id="yourName" placeholder="अपना नाम लिखें" />
+        <button class="btn btn-primary" onclick="saveName()">Save</button>
+      </div>
+
+      <div class="kpi">
+        <div><div class="muted">आज की राइड्स</div><div id="kpiTrips" style="font-size:22px;font-weight:700">0</div></div>
+        <div><div class="muted">औसत किराया</div><div id="kpiAvg" style="font-size:22px;font-weight:700">₹0</div></div>
+        <div><div class="muted">कमाई (फेक)</div><div id="kpiEarning" style="font-size:22px;font-weight:700">₹0</div></div>
+      </div>
+
+      <label>Pickup (कहाँ से?)</label>
+      <input id="pickup" placeholder="उदा: IIT Gate, Kanpur" />
+
+      <label>Drop (कहाँ तक?)</label>
+      <input id="drop" placeholder="उदा: Z Square Mall" />
+
+      <div class="row">
+        <div>
+          <label>Distance (किमी)</label>
+          <input id="km" type="number" step="0.1" placeholder="उदा: 5.2" />
+        </div>
+        <div>
+          <label>Time (मिनट)</label>
+          <input id="mins" type="number" step="1" placeholder="उदा: 14" />
+        </div>
+      </div>
+
+      <label>Vehicle</label>
+      <select id="veh">
+        <option value="bike">Bike</option>
+        <option value="auto">Auto</option>
+      </select>
+
+      <div class="actions">
+        <button class="btn btn-ghost" onclick="estimate()">Estimate Fare</button>
+        <button class="btn btn-primary" onclick="bookRide()">Book Ride</button>
+        <button class="btn btn-ghost" onclick="clearForm()">Reset</button>
+      </div>
+
+      <div class="result" id="estBox" style="display:none;"></div>
+      <div class="result" id="bookBox" style="display:none;"></div>
+
+      <h3 style="margin-top:16px;">Ride History</h3>
+      <div class="actions">
+        <span class="pill">लोकल स्टोरेज में सेव होता है</span>
+        <button class="btn btn-ghost" onclick="clearHistory()">Clear History</button>
+      </div>
+      <div id="history"></div>
+    </div>
+
+    <div class="footer">© Demo for learning – No real services</div>
+  </div>
+
+  <script>
+    const rules = {
+      bike: { base: 20, perKm: 7, perMin: 1, minFare: 30 },
+      auto: { base: 30, perKm: 10, perMin: 1.5, minFare: 40 }
+    };
+
+    const drivers = [
+      { name:"Aman", rating:4.9 }, { name:"Rohit", rating:4.8 },
+      { name:"Sneha", rating:4.7 }, { name:"Priya", rating:4.9 },
+      { name:"Vijay", rating:4.6 }
+    ];
+
+    function byId(id){ return document.getElementById(id); }
+
+    function greet(){
+      const name = localStorage.getItem('demo_name') || '';
+      const hello = byId('hello');
+      const login = byId('loginBox');
+      if(name){
+        hello.innerHTML = `नमस्ते, <b>${escapeHtml(name)}</b> 👋`;
+        login.style.display = 'none';
+      }else{
+        hello.innerHTML = '';
+        login.style.display = 'flex';
+      }
+    }
+
+    function saveName(){
+      const v = byId('yourName').value.trim();
+      if(!v) return alert('कृपया नाम लिखें');
+      localStorage.setItem('demo_name', v);
+      greet();
+    }
+
+    function calcFare(km, mins, type){
+      const r = rules[type];
+      const raw = r.base + (r.perKm * km) + (r.perMin * mins);
+      return Math.max(r.minFare, Math.round(raw));
+    }
+
+    function estimate(){
+      const km = parseFloat(byId('km').value);
+      const mins = parseFloat(byId('mins').value);
+      const type = byId('veh').value;
+      if(isNaN(km) || isNaN(mins)) return alert('Distance और Time भरें');
+      const fare = calcFare(km, mins, type);
+      byId('estBox').style.display = 'block';
+      byId('estBox').innerHTML = `Estimated Fare: <b>₹${fare}</b> (${type})`;
+      return fare;
+    }
+
+    function randomDriver(){
+      return drivers[Math.floor(Math.random()*drivers.length)];
+    }
+
+    function bookRide(){
+      const pickup = byId('pickup').value.trim();
+      const drop = byId('drop').value.trim();
+      const km = parseFloat(byId('km').value);
+      const mins = parseFloat(byId('mins').value);
+      const type = byId('veh').value;
+
+      if(!pickup || !drop) return alert('Pickup और Drop भरें');
+      if(isNaN(km) || isNaN(mins)) return alert('Distance और Time भरें');
+
+      const fare = calcFare(km, mins, type);
+      const otp = String(Math.floor(1000 + Math.random()*9000));
+      const d = randomDriver();
+
+      const trip = {
+        id: 'T' + Date.now(),
+        at: new Date().toISOString(),
+        pickup, drop, km, mins, type, fare,
+        driver: d.name, rating: d.rating, otp
+      };
+
+      saveTrip(trip);
+      renderHistory();
+      renderKPI();
+
+      byId('bookBox').style.display = 'block';
+      byId('bookBox').innerHTML = `
+        <div><b>Driver:</b> ${escapeHtml(trip.driver)} <span class="pill">⭐ ${trip.rating}</span></div>
+        <div><b>OTP:</b> <span class="pill">${trip.otp}</span></div>
+        <div><b>Fare:</b> ₹${trip.fare}</div>
+        <div><b>Route:</b> ${escapeHtml(trip.pickup)} → ${escapeHtml(trip.drop)}</div>
+        <div class="muted">नोट: यह सिर्फ डेमो है, असली बुकिंग नहीं।</div>
+      `;
+      byId('estBox').style.display = 'none';
+    }
+
+    function saveTrip(trip){
+      const key = 'demo_trips';
+      const arr = JSON.parse(localStorage.getItem(key) || '[]');
+      arr.unshift(trip);
+      localStorage.setItem(key, JSON.stringify(arr.slice(0,50)));
+    }
+
+    function renderHistory(){
+      const key = 'demo_trips';
+      const arr = JSON.parse(localStorage.getItem(key) || '[]');
+      if(!arr.length){ byId('history').innerHTML = '<div class="muted">अभी कोई राइड नहीं</div>'; return; }
+      let html = '<table><thead><tr><th>समय</th><th>Route</th><th>Type</th><th>Fare</th></tr></thead><tbody>';
+      for(const t of arr){
+        const time = new Date(t.at).toLocaleString();
+        html += `<tr>
+          <td>${escapeHtml(time)}</td>
+          <td>${escapeHtml(t.pickup)} → ${escapeHtml(t.drop)}</td>
+          <td>${t.type}</td>
+          <td>₹${t.fare}</td>
+        </tr>`;
+      }
+      html += '</tbody></table>';
+      byId('history').innerHTML = html;
+    }
+
+    function clearHistory(){
+      if(confirm('पूरी history मिटानी है?')) {
+        localStorage.removeItem('demo_trips');
+        renderHistory(); renderKPI();
+      }
+    }
+
+    function clearForm(){
+      ['pickup','drop','km','mins'].forEach(id=> byId(id).value='');
+      byId('veh').value='bike';
+      byId('estBox').style.display='none';
+      byId('bookBox').style.display='none';
+    }
+
+    function renderKPI(){
+      const key = 'demo_trips';
+      const arr = JSON.parse(localStorage.getItem(key) || '[]');
+      byId('kpiTrips').textContent = String(arr.length);
+      const avg = arr.length ? Math.round(arr.reduce((s,t)=>s+t.fare,0)/arr.length) : 0;
+      byId('kpiAvg').textContent = '₹' + avg;
+      const earning = Math.round(arr.reduce((s,t)=>s + (t.fare*0.8), 0)); // 80% driver share (फेक)
+      byId('kpiEarning').textContent = '₹' + earning;
+    }
+
+    function escapeHtml(str){
+      return str.replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[s]));
+    }
+
+    // init
+    greet(); renderHistory(); renderKPI();
+  </script>
+</body>
+</html>
